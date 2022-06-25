@@ -1,0 +1,416 @@
+---
+title: "Project EDA"
+author: "Meghana Boinpally"
+date: "4/21/2022"
+output: html_document
+---
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+library(patchwork)
+library(corrplot)
+library(GoodmanKruskal)
+library(dplyr)
+library(rpart.plot)
+library(rpart)				        # Popular decision tree algorithm
+library(rattle)					# Fancy tree plot
+library(rpart.plot)				# Enhanced tree plots
+library(RColorBrewer)				# Color selection for fancy tree plot
+library(party)					# Alternative decision tree algorithm
+library(partykit)				# Convert rpart object to BinaryTree
+library(caret)
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+df<-healthcare.dataset.stroke.data
+df <- df %>% subset(bmi!='N/A' & gender!='Other')
+df$stroke<-as.character(df$stroke)
+```
+
+```{r}
+df1<-subset(df,stroke==1)
+df0<-subset(df,stroke==0)
+```
+
+```{r}
+my.theme <- theme_classic()  + theme(aspect.ratio = 1)
+
+ggplot(df0, aes(x=avg_glucose_level, fill = stroke)) +
+  geom_density(alpha=0.3)+geom_density(data=df1,aes(x=avg_glucose_level,fill=stroke),alpha=0.3)+my.theme+labs(x="Average Glucose Level",y="Density",title="Distribution of Average Glucose Level Among the Cohorts")
+
+```
+- Since our dataset is heavily imbalanced we divided our dataset into 2 cohorts. Cohort 0 having stroke==0 and cohort 1 having stroke==1
+- From the above graph we can observe that most people having a stroke usually have a higher Average glucose level than those who never had a stroke
+
+```{r}
+ggplot(df, aes(x=bmi,  group=stroke)) + 
+  geom_boxplot(aes(fill=stroke))+my.theme+labs(x="BMI",title="Distribution of BMI Among the Cohorts")
+```
+- People who had a stroke have a slightly higher bmi than those who never had a stroke
+
+
+```{r}
+
+ggplot(df0, aes(x=age, fill = stroke)) +
+  geom_density(alpha=0.3)+geom_density(data=df1,aes(x=age,fill=stroke),alpha=0.3)+my.theme+labs(x="Age",title="Distribution of Age Among the Cohorts")
+```
+- Most people having a stroke are old people. The chances of having a stroke drmatically increases after 50 years of age
+
+```{r}
+s0 <- df %>% subset(stroke==0) %>% group_by(smoking_status) %>% summarise(cnt = n()) %>% mutate(freq = (cnt / sum(cnt)))
+s1 <- df %>% subset(stroke==1) %>% group_by(smoking_status) %>% summarise(cnt = n()) %>% mutate(freq = (cnt / sum(cnt)))
+s0$stroke <- 0
+s1$stroke <- 1
+ss <- rbind(s0,s1)
+#ss$smoking_status <- as.integer(ss$smoking_status)
+ggplot(ss, aes(fill=smoking_status, y=freq, x=factor(stroke))) + 
+    geom_bar(position="stack", stat="identity") + labs(x = "Stroke", y = "Percentage", title = "Plot of Smoking Status vs Stroke") 
+#+ scale_color_manual(name = "Gender", values = c("Female" = "magenta", "Male" = "blue"))
+```
+- It can be observed that people who are having a history of smoking tends to higher risk of stroke when compared to others
+
+
+```{r}
+ggplot(df) + 
+  geom_mosaic(aes(product(stroke,gender),fill= gender)) + facet_wrap(~heart_disease) + labs(x='Heart Disease', y='Stroke', title='Mosaic Plot of Gender & Heart Disease vs Stroke')
+```
+- There is no effect of gender on having a stroke, we can observe this in the graphs as both the graphs mirror each other.
+- It can be seen that there is a higher risk of stroke for those who have heart disease.
+
+```{r}
+
+ggplot(df) + 
+  geom_mosaic(aes(product(stroke,Residence_type),fill= Residence_type)) + facet_wrap(~hypertension) + labs(x='Hypertension', y='Stroke', title='Mosaic Plot of Type of Residence & Hypertension vs Stroke')
+```
+- Residence Type does not show any significant difference across Stroke.
+- It can be noticed that those who have hypertension, have a higher risk of stroke.
+
+
+```{r}
+
+s0 <- df %>% subset(stroke==0) %>% group_by(work_type) %>% summarise(cnt = n()) %>% mutate(freq = round(cnt / sum(cnt),2))
+s1 <- df %>% subset(stroke==1) %>% group_by(work_type) %>% summarise(cnt = n()) %>% mutate(freq = round(cnt / sum(cnt),2))
+s1 <- rbind(s1,c('Never_worked',0,0.000000000))
+s0$stroke <- 0
+s1$stroke <- 1
+ss <- rbind(s0,s1)
+ss$stroke <- as.factor(ss$stroke)
+ggplot(ss, aes(fill=stroke, y=freq, x=work_type)) + 
+    geom_bar(position="dodge", stat="identity") + labs(x = "Work Type ", y = "Percentage", title = "Plot of Work Type vs Stroke")+ scale_color_manual(name = "Stroke", values = c("0" = "magenta", "1" = "blue"))
+```
+- There is a higher risk of stroke for those who are working especially in Private or are self- employed.
+
+```{r}
+age_bracket <- c()
+for (i in df$age) {
+  if (i<=10) {
+    age_bracket <- c(age_bracket,"1-10")
+  } else if (i<=20) {
+    age_bracket <- c(age_bracket,"11-20")
+  } else if (i<=30) {
+    age_bracket <- c(age_bracket,"21-30")
+  } else if (i<=40) {
+    age_bracket <- c(age_bracket,"31-40")
+  } else if (i<=50) {
+    age_bracket <- c(age_bracket,"41-50")
+  } else if (i<=60) {
+    age_bracket <- c(age_bracket,"51-60")
+  } else if (i<=70) {
+    age_bracket <- c(age_bracket,"61-70")
+  } else {
+    age_bracket <- c(age_bracket,"70+")
+  }
+} 
+
+df$age_bracket <- age_bracket
+
+```
+
+
+```{r}
+df %>% subset(ever_married=='Yes') %>% ggplot() + 
+  geom_mosaic(aes(product(stroke,age_bracket),fill= age_bracket)) + labs(x = "Age Bracket", y = "Stroke", title = "Mosaic Plot of Age Bracket vs Stroke for the Married")
+```
+
+```{r}
+df %>% subset(ever_married=='No') %>% ggplot() + 
+  geom_mosaic(aes(product(stroke,age_bracket),fill= age_bracket)) + labs(x = "Age Bracket", y = "Stroke", title = "Mosaic Plot of Age Bracket vs Stroke for the Un-Married")
+```
+
+From this graph we observe that being married is correlated to the age ​
+
+Age has an effect on stroke not being married
+
+```{r}
+varSet1 <- c( "gender","heart_disease","hypertension","ever_married","work_type","Residence_type","smoking_status","stroke" )
+CarFrame1 <- subset(df, select = varSet1)
+GKmatrix1 <- GKtauDataframe(CarFrame1)
+plot(GKmatrix1)
+
+
+```
+- The Goodman and Kruskal tau measure is an asymmetric association measure between two categorical variables, based on the extent to which variation in one variable can be explained by the other.
+- No variable is perfectly predictable from another variable.
+- The reasonable association seen in this plot is that between work_type and ever_married where the forward association is 0.32 and the reverse association is 0.08
+
+```{r}
+s0 <- df %>% subset(ever_married=='Yes') %>% group_by(work_type) %>% summarise(cnt = n()) %>% mutate(freq = (cnt / sum(cnt)))
+s1 <- df %>% subset(ever_married=='No') %>% group_by(work_type) %>% summarise(cnt = n()) %>% mutate(freq = (cnt / sum(cnt)))
+s0 <- rbind(s0,c('Never_worked',0,0.00000))
+s0 <- rbind(s0,c('children',0,0.00000))
+s0$ever_married <- 'Yes'
+s1$ever_married <- 'No'
+ss <- rbind(s0,s1)
+ggplot(ss, aes(fill=ever_married, y=freq, x=work_type)) + 
+    geom_bar(position="dodge", stat="identity")
+```
+- From this graph we show proof of concept that there is one way association between work_type and ever married 
+- We can observe that children and never_worked were never married.
+
+```{r}
+
+my.theme <- theme_classic()  + theme(aspect.ratio = 1)
+ggplot(df, aes(y = avg_glucose_level, x = age)) + geom_point(aes(color=stroke),alpha=0.8) +geom_density2d()+my.theme
+```
+
+- From the plot, we can see that there are two clusters: one at the bottom appears to be  of people who haven't had a stroke, and the other at the top appears to be  of people who have had a stroke. We can interpret that most people who disnt have stroke had a lower average glucose level across all ages.
+
+```{r}
+df <- df %>% subset(bmi!='N/A' & gender!='Other')
+varSet2 <- c( 'age', 'avg_glucose_level','bmi','stroke')
+dfnum <- subset(df, select = varSet2)	
+```
+
+```{r}
+dfnum <- sapply(dfnum, as.numeric)
+res <- cor(dfnum)
+```
+
+```{r}
+corrplot(res, type = "upper", order = "hclust", 
+         tl.col = "black", tl.srt = 45)+my.theme
+```
+# Correlation plot between continuous variables
+- Age and stroke are positively correlated. 
+
+- Average glucose level is also correlated with stroke.
+
+- BMI seems to be not correlated to having stroke at all. 
+#Random Forest
+```{r}
+df0sub<-df0[0:209,]
+df1sub<-df1[0:209,]
+rf <- rbind(df1sub, df0sub)
+```
+
+```{r}
+shuffle_index <- sample(1:nrow(rf))
+rf <- rf[shuffle_index, ]
+```
+'
+```{r}
+
+# Drop variables
+drop_rf <- rf %>%select(-c(id, Residence_type, gender,bmi))
+rf<-drop_rf
+```
+
+
+```{r}
+
+glimpse(rf)
+```
+
+
+```{r}
+create_train_test <- function(data, size = 0.9, rf = TRUE) {
+    n_row = nrow(data)
+    total_row = size * n_row
+   train_sample <- 1: total_row
+  
+    if (rf == TRUE) {
+        return (data[train_sample, ])
+    } else {
+        return (data[-train_sample, ])
+    }
+}
+```
+
+```{r}
+data_train <- create_train_test(rf, 0.8, rf = TRUE)
+data_test <- create_train_test(rf, 0.8, rf = FALSE)
+dim(data_train)
+```
+
+```{r}
+print(dim(data_train))
+print(dim(data_test))
+```
+
+```{r}
+data_train$ever_married = as.factor(data_train$ever_married)
+data_train$work_type = as.factor(data_train$work_type)
+data_train$smoking_status = as.factor(data_train$smoking_status)
+data_train$hypertension = as.factor(data_train$hypertension)
+data_train$heart_disease = as.numeric(data_train$heart_disease)
+data_train$stroke = as.factor(data_train$stroke)
+```
+
+```{r}
+
+data_test$ever_married = as.factor(data_test$ever_married)
+data_test$work_type = as.factor(data_test$work_type)
+data_test$smoking_status = as.factor(data_test$smoking_status)
+data_test$hypertension = as.factor(data_test$hypertension)
+data_test$heart_disease = as.numeric(data_test$heart_disease)
+data_test$stroke = as.factor(data_test$stroke)
+```
+
+```{r}
+#min-max scalar
+normalize <- function(x, na.rm = TRUE) {
+    return((x- min(x)) /(max(x)-min(x)))
+}
+
+```
+
+```{r}
+
+data_train$avg_glucose_level<-normalize(data_train$avg_glucose_level)
+data_test$avg_glucose_level<-normalize(data_test$avg_glucose_level)
+
+```
+
+```{r}
+# define function that reruns factor() for the right columns
+rerun_factor <- function(x) {
+  if (is.factor(x)) return(factor(x))
+  return(x)
+}
+
+# run on all columns of your data
+training_data <- as.data.frame(lapply(data_train, rerun_factor))
+training_data <-as.data.frame(training_data)
+
+
+testing_data <- as.data.frame(lapply(data_test, rerun_factor))
+testing_data <-as.data.frame(testing_data)
+
+```
+
+```{r}
+tr <- rpart(stroke~.,data = training_data, method = 'class',minsplit =10, minbucket =10,cp=0.005)	
+rpart.plot(tr)
+```
+
+
+```{r}
+tr <- rpart(stroke~.,data = training_data, method = 'class',minsplit =5, minbucket =10,cp=0.005)	
+rpart.plot(tr)
+```
+
+```{r}
+tr <- rpart(stroke~.,data = training_data, method = 'class',minsplit =5, minbucket =15,cp=-2)	
+rpart.plot(tr)
+```
+```{r}
+predict_unseen <-predict(tr, testing_data, type = 'class')
+
+```
+
+
+```{r}
+table_mat <- table(testing_data$stroke, predict_unseen)
+table_mat
+```
+
+```{r}
+#cfm <- as_tibble(table_mat)
+cfm<-as.data.frame(table_mat)
+cfm
+```
+
+```{r}
+library(cvms)
+library(tibble)
+plot_confusion_matrix(cfm, 
+                      target_col = "Var1", 
+                      prediction_col = "predict_unseen",
+                      counts_col = "Freq")
+```
+
+```{r}
+drop_rf <- rf %>%select(-c(id, Residence_type, gender,bmi))
+
+```
+
+
+```{r}
+suppressPackageStartupMessages(library(FactoMineR))
+suppressPackageStartupMessages(library(factoextra))
+
+## FAMD
+res.famd <- FAMD(drop_rf, 
+                 sup.var = 20,  ## Set the target variable "Churn" as a supplementary variable
+                 graph = FALSE, 
+                 ncp=25)
+
+## Inspect principal components
+get_eigenvalue(res.famd)
+```
+```{r}
+library(PCAmixdata)
+split <- splitmix(rf[1:7])  
+
+## FAMD
+res.pcamix <- PCAmix(X.quanti=split$X.quanti,  
+                     X.quali=split$X.quali, 
+                     rename.level=TRUE, 
+                     graph=FALSE, 
+                     ndim=10)
+
+## Inspect principal components
+
+```
+
+```{r}
+fviz_famd_ind(res.famd, label = "none", 
+              habillage = "stroke", palette = c("#00AFBB", "#FC4E07"), # color by groups 
+              repel = TRUE,alpha.ind = 0.5) + 
+    xlim(-6, 6) + ylim (-5, 5) +
+    theme(text = element_text(size=10), axis.text.x = element_text(size=10), axis.text.y = element_text(size=10))+my.theme
+```
+- Only a small percent of variation is represented by the principal components.
+- This suggests that there are not a lot of correlation among the variables, so we cannot significantly reduce the dimension
+
+
+
+#Appendix
+```{r}
+s0 <- df %>% subset(stroke==0) %>% group_by(gender) %>% summarise(cnt = n()) %>% mutate(freq = (cnt / sum(cnt)))
+s1 <- df %>% subset(stroke==1) %>% group_by(gender) %>% summarise(cnt = n()) %>% mutate(freq = (cnt / sum(cnt)))
+s0$stroke <- 0
+s1$stroke <- 1
+ss <- rbind(s0,s1)
+ss$stroke <- as.integer(ss$stroke)
+ggplot(ss, aes(fill=gender, y=freq, x=factor(stroke))) + 
+    geom_bar(position="stack", stat="identity") + labs(x = "Stroke", y = "Percentage", title = "Plot of Gender vs Stroke") + scale_color_manual(name = "Gender", values = c("Female" = "magenta", "Male" = "blue"))
+#+ scale_x_discrete(name="stroke") 
+```
+
+```{r}
+s0 <- df %>% subset(stroke==0) %>% group_by(Residence_type) %>% summarise(cnt = n()) %>% mutate(freq = (cnt / sum(cnt)))
+s1 <- df %>% subset(stroke==1) %>% group_by(Residence_type) %>% summarise(cnt = n()) %>% mutate(freq = (cnt / sum(cnt)))
+s0$stroke <- 0
+s1$stroke <- 1
+ss <- rbind(s0,s1)
+ggplot(ss, aes(fill=Residence_type, y=freq, x=factor(stroke))) + 
+    geom_bar(position="stack", stat="identity") + labs(x = "Stroke", y = "Percentage", title = "Plot of Residence Type vs Stroke") + scale_color_manual(name = "Gender", values = c("Female" = "magenta", "Male" = "blue"))
+```
+
